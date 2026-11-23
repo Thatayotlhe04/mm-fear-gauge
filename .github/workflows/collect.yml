@@ -1,0 +1,50 @@
+name: collect
+
+on:
+  push:
+    branches: [main]
+    paths: ["collector/**", ".github/workflows/collect.yml"]
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Collection length in minutes"
+        default: "340"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: A
+            user: "0x010461c14e146ac35fe42271bdc1134ee31c703a"
+          - label: B
+            user: "0x31ca8395cf837de08b24da3f660e77761dfb974b"
+    runs-on: ubuntu-latest
+    timeout-minutes: 358
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q aiohttp orjson pyarrow
+      - run: curl -s https://api.ipify.org; echo
+      - run: python collector/collect.py --user ${{ matrix.user }} --label ${{ matrix.label }} --minutes ${{ inputs.minutes || '340' }}
+
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q requests pyarrow
+      - run: python collector/backfill.py
