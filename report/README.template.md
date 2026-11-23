@@ -68,7 +68,7 @@ python analysis/figures.py          # figures/
 python analysis/report.py           # results/RESULTS.md
 ```
 
-The `analyze` workflow runs the same five steps on GitHub Actions with pinned versions. To collect a new sample, run the `collect` workflow (default 340 minutes).
+The `analyze` workflow runs the same five steps on GitHub Actions with pinned versions; the committed `results/` and `figures/` are its output. A rerun on the same machine reproduces every number exactly; on a different CPU, results agree to three or four significant figures, because tied timestamps can sort differently before sub-sampling. To collect a new sample, run the `collect` workflow (default 340 minutes).
 
 ## Layout
 
