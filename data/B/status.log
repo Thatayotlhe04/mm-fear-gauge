@@ -380,3 +380,13 @@
 2026-11-23T22:39:34Z status quotes=2482458 ladder=4193640 book=282228 trades=697268 fills=27953 mids=231934 ctx=3384232 pos=348168 horders=332000 | polls=14267 poll_p50=348ms poll_p90=564ms interval=1.40s 429=0 http_err=0 ws_msgs=3999052 ws_reconnect=5 universe=174
 2026-11-23T22:40:34Z status quotes=2489940 ladder=4205311 book=283098 trades=698424 fills=28039 mids=232598 ctx=3394378 pos=349058 horders=334000 | polls=14310 poll_p50=396ms poll_p90=592ms interval=1.40s 429=0 http_err=0 ws_msgs=4010804 ws_reconnect=5 universe=174
 2026-11-23T22:41:34Z status quotes=2497422 ladder=4220506 book=283968 trades=699337 fills=28136 mids=233211 ctx=3404590 pos=350126 horders=334000 | polls=14353 poll_p50=351ms poll_p90=560ms interval=1.40s 429=0 http_err=0 ws_msgs=4022528 ws_reconnect=5 universe=174
+2026-11-23T22:41:43Z flushed 354088 rows, push ok=True
+2026-11-23T22:42:38Z status quotes=2505252 ladder=4232102 book=284838 trades=700325 fills=28223 mids=233806 ctx=3415432 pos=351372 horders=336000 | polls=14398 poll_p50=349ms poll_p90=559ms interval=1.40s 429=0 http_err=0 ws_msgs=4034884 ws_reconnect=5 universe=174
+2026-11-23T22:43:18Z ws trades reconnect after: RuntimeError('ws closed: 8')
+2026-11-23T22:43:23Z ws trades: subscribed 174
+2026-11-23T22:43:38Z status quotes=2512734 ladder=4246755 book=285708 trades=706571 fills=28333 mids=234442 ctx=3425644 pos=352262 horders=336000 | polls=14441 poll_p50=344ms poll_p90=565ms interval=1.40s 429=0 http_err=0 ws_msgs=4046999 ws_reconnect=6 universe=174
+2026-11-23T22:43:43Z ws ctx reconnect after: RuntimeError('ws closed: 8')
+2026-11-23T22:43:48Z ws ctx: subscribed 174
+2026-11-23T22:44:38Z status quotes=2520216 ladder=4258471 book=286578 trades=709382 fills=28402 mids=235150 ctx=3435532 pos=353330 horders=338000 | polls=14484 poll_p50=441ms poll_p90=577ms interval=1.40s 429=0 http_err=0 ws_msgs=4058967 ws_reconnect=7 universe=174
+2026-11-23T22:45:38Z status quotes=2527698 ladder=4270189 book=287274 trades=710396 fills=28485 mids=235770 ctx=3445624 pos=354398 horders=338000 | polls=14527 poll_p50=360ms poll_p90=559ms interval=1.40s 429=0 http_err=0 ws_msgs=4070422 ws_reconnect=7 universe=174
+2026-11-23T22:46:23Z status quotes=2533092 ladder=4278932 book=287970 trades=711344 fills=28542 mids=236275 ctx=3452933 pos=355110 horders=340000 | polls=14558 poll_p50=378ms poll_p90=550ms interval=1.40s 429=0 http_err=0 ws_msgs=4078966 ws_reconnect=7 universe=174
