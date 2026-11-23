@@ -1,0 +1,9 @@
+2026-11-23T17:06:21Z start user=0x31ca8395cf837de08b24da3f660e77761dfb974b label=B coins=174 orders=3058
+2026-11-23T17:06:21Z ws user: subscribed 2
+2026-11-23T17:06:23Z ws book2: subscribed 87
+2026-11-23T17:06:23Z ws book1: subscribed 87
+2026-11-23T17:06:24Z ws trades: subscribed 174
+2026-11-23T17:06:25Z ws ctx: subscribed 174
+2026-11-23T17:07:21Z status quotes=7482 ladder=14844 book=957 trades=7329 fills=113 mids=760 ctx=9868 pos=1068 horders=2000 | polls=43 poll_p50=448ms poll_p90=576ms interval=1.40s 429=0 http_err=0 ws_msgs=12596 ws_reconnect=0 universe=174
+2026-11-23T17:08:21Z status quotes=14964 ladder=26704 book=1827 trades=11186 fills=219 mids=1510 ctx=19960 pos=2136 horders=2000 | polls=86 poll_p50=455ms poll_p90=622ms interval=1.40s 429=0 http_err=0 ws_msgs=25125 ws_reconnect=0 universe=174
+2026-11-23T17:09:21Z status quotes=22446 ladder=38412 book=2697 trades=15052 fills=325 mids=2274 ctx=30052 pos=3204 horders=4000 | polls=129 poll_p50=367ms poll_p90=628ms interval=1.40s 429=0 http_err=0 ws_msgs=37563 ws_reconnect=0 universe=174
