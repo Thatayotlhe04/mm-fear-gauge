@@ -183,3 +183,18 @@
 2026-11-23T19:48:14Z status quotes=1206516 ladder=2044168 book=137225 trades=396376 fills=13630 mids=115905 ctx=1644107 pos=168032 horders=162000 | polls=6934 poll_p50=808ms poll_p90=1036ms interval=1.40s 429=0 http_err=0 ws_msgs=1960152 ws_reconnect=0 universe=174
 2026-11-23T19:49:14Z status quotes=1213824 ladder=2055854 book=138095 trades=398632 fills=13713 mids=116601 ctx=1654373 pos=168922 horders=164000 | polls=6976 poll_p50=814ms poll_p90=910ms interval=1.40s 429=0 http_err=0 ws_msgs=1972227 ws_reconnect=0 universe=174
 2026-11-23T19:50:14Z status quotes=1221306 ladder=2067591 book=138965 trades=401274 fills=13774 mids=117356 ctx=1664465 pos=169990 horders=164000 | polls=7019 poll_p50=665ms poll_p90=872ms interval=1.40s 429=0 http_err=0 ws_msgs=1984304 ws_reconnect=0 universe=174
+2026-11-23T19:50:17Z flushed 373283 rows, push ok=True
+2026-11-23T19:51:17Z status quotes=1229310 ladder=2082307 book=139835 trades=403369 fills=13872 mids=118215 ctx=1675253 pos=171058 horders=166000 | polls=7065 poll_p50=667ms poll_p90=897ms interval=1.40s 429=0 http_err=0 ws_msgs=1997039 ws_reconnect=0 universe=174
+2026-11-23T19:52:17Z status quotes=1236618 ladder=2094346 book=140705 trades=405513 fills=13992 mids=118920 ctx=1685399 pos=172126 horders=166000 | polls=7107 poll_p50=598ms poll_p90=856ms interval=1.40s 429=0 http_err=0 ws_msgs=2009178 ws_reconnect=0 universe=174
+2026-11-23T19:53:17Z status quotes=1244100 ladder=2106333 book=141575 trades=409238 fills=14106 mids=119631 ctx=1695611 pos=173194 horders=168000 | polls=7150 poll_p50=573ms poll_p90=866ms interval=1.40s 429=0 http_err=0 ws_msgs=2021549 ws_reconnect=0 universe=174
+2026-11-23T19:54:17Z status quotes=1251582 ladder=2121398 book=142445 trades=411211 fills=14206 mids=120268 ctx=1705770 pos=174262 horders=168000 | polls=7193 poll_p50=505ms poll_p90=815ms interval=1.40s 429=0 http_err=0 ws_msgs=2033648 ws_reconnect=0 universe=174
+2026-11-23T19:55:17Z status quotes=1259064 ladder=2133207 book=143315 trades=413422 fills=14305 mids=120821 ctx=1715959 pos=175330 horders=170000 | polls=7236 poll_p50=652ms poll_p90=856ms interval=1.40s 429=0 http_err=0 ws_msgs=2045839 ws_reconnect=0 universe=174
+2026-11-23T19:56:17Z status quotes=1266546 ladder=2144651 book=144011 trades=415274 fills=14391 mids=121454 ctx=1726061 pos=176220 horders=170000 | polls=7279 poll_p50=651ms poll_p90=825ms interval=1.40s 429=0 http_err=0 ws_msgs=2057564 ws_reconnect=0 universe=174
+2026-11-23T19:56:33Z ws user reconnect after: RuntimeError('ws closed: 8')
+2026-11-23T19:56:34Z ws user: subscribed 2
+2026-11-23T19:57:18Z status quotes=1274028 ladder=2158970 book=144881 trades=416613 fills=14503 mids=122197 ctx=1736153 pos=177288 horders=172000 | polls=7322 poll_p50=552ms poll_p90=820ms interval=1.40s 429=0 http_err=0 ws_msgs=2069451 ws_reconnect=1 universe=174
+2026-11-23T19:57:43Z ws trades reconnect after: RuntimeError('ws closed: 8')
+2026-11-23T19:57:48Z ws trades: subscribed 174
+2026-11-23T19:58:18Z status quotes=1281336 ladder=2171317 book=145751 trades=423188 fills=14597 mids=122862 ctx=1746419 pos=178356 horders=172000 | polls=7364 poll_p50=652ms poll_p90=821ms interval=1.40s 429=0 http_err=0 ws_msgs=2081822 ws_reconnect=2 universe=174
+2026-11-23T19:59:18Z status quotes=1288992 ladder=2183214 book=146621 trades=424917 fills=14673 mids=123556 ctx=1756511 pos=179424 horders=174000 | polls=7408 poll_p50=654ms poll_p90=838ms interval=1.40s 429=0 http_err=0 ws_msgs=2093680 ws_reconnect=2 universe=174
+2026-11-23T20:00:18Z status quotes=1296300 ladder=2194858 book=147491 trades=427277 fills=14755 mids=124224 ctx=1766603 pos=180492 horders=174000 | polls=7450 poll_p50=720ms poll_p90=1049ms interval=1.40s 429=0 http_err=0 ws_msgs=2105839 ws_reconnect=2 universe=174
