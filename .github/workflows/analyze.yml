@@ -1,0 +1,36 @@
+name: analyze
+
+# Rebuilds results/ and figures/ from the collected data branches. Manual, so a
+# rerun is a deliberate act and the committed numbers always match the README.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: analyze
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -q numpy==2.5.3 pandas==3.0.5 scipy==1.18.1 statsmodels==0.15.0 matplotlib==3.11.2 pyarrow==26.0.1
+      - run: bash analysis/sync_data.sh
+      - run: python analysis/simulate.py
+      - run: python analysis/run_all.py
+      - run: python analysis/figures.py
+      - run: python analysis/report.py
+      - name: commit results
+        run: |
+          git config user.name "analysis-bot"
+          git config user.email "analysis-bot@users.noreply.github.com"
+          git add results figures
+          git commit -m "Regenerate results and figures from collected data [skip ci]" || echo "nothing to commit"
+          git push
