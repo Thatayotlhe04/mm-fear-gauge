@@ -27,6 +27,8 @@ def apply():
 
 
 def title(ax, main, sub=None):
+    main = main.replace("$", r"\$")
+    sub = sub.replace("$", r"\$") if sub else sub
     ax.set_title(main, color=INK, loc="left", fontsize=11.5, pad=22 if sub else 10)
     if sub:
         ax.text(0, 1.02, sub, transform=ax.transAxes, color=INK2, fontsize=8.5, va="bottom")

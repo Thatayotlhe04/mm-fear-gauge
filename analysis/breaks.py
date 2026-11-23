@@ -1,5 +1,6 @@
 """Where the textbook model breaks. Each function returns tidy results used by the
 report and figures."""
+import glob
 import os
 import sys
 
@@ -300,3 +301,60 @@ def inventory_attribution(pA, pV, paramsV, window_min=10):
                           "share_windows_vault_positive": float((bw.theta_vault > 0).mean()),
                           "share_windows_own_positive": float((bw.theta_own > 0).mean()), "windows": len(bw)}
     return out, bw
+
+
+# ------------------------------------------------------------------ 12. the mirrored pair
+def mirror_stats():
+    """How A and B relate: positions, flow, joint execution, reported PnL."""
+    import json as _json
+    pa, pb = load("A", "pos"), load("B", "pos")
+    la = pa[pa.t_recv == pa.t_recv.max()].set_index("coin")
+    lb = pb[pb.t_recv == pb.t_recv.max()].set_index("coin")
+    j = la[["szi", "pos_value"]].join(lb[["szi", "pos_value"]], lsuffix="_A", rsuffix="_B", how="outer").fillna(0)
+    acct_a = float(j.loc["__ACCOUNT__", "szi_A"]) if "__ACCOUNT__" in j.index else np.nan
+    acct_b = float(j.loc["__ACCOUNT__", "szi_B"]) if "__ACCOUNT__" in j.index else np.nan
+    j = j.drop("__ACCOUNT__", errors="ignore")
+    sa, sb = np.sign(j.szi_A) * j.pos_value_A, np.sign(j.szi_B) * j.pos_value_B
+    px = (j.pos_value_A / j.szi_A.abs()).where(j.szi_A != 0, j.pos_value_B / j.szi_B.abs())
+    vault_gross = float(((j.szi_A + j.szi_B).abs() * px).sum())
+    held = (j.szi_A != 0) & (j.szi_B != 0)
+    fa = load("A", "fills").drop_duplicates("tid")
+    fb = load("B", "fills").drop_duplicates("tid")
+    for f in (fa, fb):
+        f["sq"] = np.where(f.side == "B", 1.0, -1.0) * f.sz
+        f["usd_s"] = f.sq * f.px
+        f["m"] = f.time // 60000
+
+    def _corr(mask_a, mask_b, keys):
+        x = pd.concat([fa[mask_a].groupby(keys).usd_s.sum().rename("A"), fb[mask_b].groupby(keys).usd_s.sum().rename("B")],
+                      axis=1).fillna(0)
+        return float(x.A.corr(x.B))
+    ta, tb = fa[fa.crossed].sort_values("time"), fb[fb.crossed].sort_values("time")
+    m = pd.merge_asof(ta, tb[["time", "coin", "sq"]].rename(columns={"time": "tb", "sq": "sq_b"}), left_on="time",
+                      right_on="tb", by="coin", direction="nearest", tolerance=250).dropna(subset=["tb"])
+    tr = load("A", "trades").drop_duplicates("tid")
+    a_, b_ = USERS["A"], USERS["B"]
+    out = {"corr_signed_positions": float(np.corrcoef(sa, sb)[0, 1]), "coins_held_by_both": int(held.sum()),
+           "share_same_sign": float((np.sign(j.szi_A[held]) == np.sign(j.szi_B[held])).mean()),
+           "gross_A": float(j.pos_value_A.sum()), "gross_B": float(j.pos_value_B.sum()), "gross_vault": vault_gross,
+           "net_A": float(sa.sum()), "net_B": float(sb.sum()), "equity_A": acct_a, "equity_B": acct_b,
+           "corr_usd_flow_coin_minute": _corr(fa.time > 0, fb.time > 0, ["coin", "m"]),
+           "corr_usd_flow_coin_minute_taker": _corr(fa.crossed, fb.crossed, ["coin", "m"]),
+           "corr_usd_flow_coin_minute_maker": _corr(~fa.crossed, ~fb.crossed, ["coin", "m"]),
+           "share_A_takers_with_B_taker_250ms": float(len(m) / max(len(ta), 1)),
+           "share_same_side_when_both_take": float((np.sign(m.sq) == np.sign(m.sq_b)).mean()) if len(m) else np.nan,
+           "taker_share_A": float(fa.crossed.mean()), "taker_share_B": float(fb.crossed.mean()),
+           "trades_between_A_and_B": int((((tr.u0 == a_) & (tr.u1 == b_)) | ((tr.u0 == b_) & (tr.u1 == a_))).sum()),
+           "fills_A": len(fa), "fills_B": len(fb)}
+    try:
+        from panel import DATA
+        vf = sorted(glob.glob(os.path.join(DATA, "r*", "X", "vaults.json")))[-1]
+        v = _json.load(open(vf))
+        for k in ("HLP", "A", "B"):
+            port = dict(v[k]["portfolio"])["allTime"]
+            out[f"alltime_pnl_{k}"] = float(port["pnlHistory"][-1][1])
+            out[f"equity_reported_{k}"] = float(port["accountValueHistory"][-1][1])
+            out[f"alltime_vlm_{k}"] = float(port.get("vlm") or 0)
+    except Exception as e:  # backfill not present
+        out["vault_history_error"] = repr(e)
+    return out

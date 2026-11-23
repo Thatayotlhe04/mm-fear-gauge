@@ -127,14 +127,14 @@ def coin_params(label, p, aggr, min_aggr=150, min_obs=300, events=None):
     return pd.DataFrame(rows)
 
 
-def fill_event_skew(label, p, horizons=(2, 5, 15), pre_ms=3000, fill_label=None):
+def fill_event_skew(label, p, horizons=(2, 5, 15), pre_ms=3000, fill_label=None, crossed=False):
     """Identification from inventory shocks HLP did not choose: a passive (maker) fill
     changes q by the fill size. Compare HLP's quote centre in the last poll before the
     fill with the first poll >= h seconds after it:
         d c = -b * d q + phi * d basis + rho * d ret + e
     Returns per-coin and pooled estimates of b at each horizon."""
     fl = load(fill_label or label, "fills").drop_duplicates("tid")
-    fl = fl[(~fl.crossed) & (fl.time >= p.t_recv.min()) & (fl.time <= p.t_recv.max())]
+    fl = fl[(fl.crossed == crossed) & (fl.time >= p.t_recv.min()) & (fl.time <= p.t_recv.max())]
     out = []
     for coin, f in fl.groupby("coin"):
         pc = p[(p.coin == coin) & p.two_sided].dropna(subset=["c", "basis"]).sort_values("t_snap")
@@ -351,3 +351,54 @@ def taker_threshold(label, p, params, n_boot=200, seed=0):
                     "p_above": float(t_[1]), "n": len(g)})
     out["windows"] = hrs
     return out, tk
+
+
+def event_horizon_profile(label, p, params, horizons=(5, 30, 120, 300, 900, 1800), n_boot=500, seed=0):
+    """Quote response to inventory shocks, by horizon, after passive fills (shocks HLP did
+    not choose) and after HLP's own taker fills. For each coin, a winsorised OLS of the
+    quote-centre change (bps) on the model-scaled fill, controlling for the change in basis
+    and the mid return; the cross-coin median theta with a bootstrap CI is robust to the
+    handful of coins that dominate a pooled regression."""
+    pr = params[params.calib == "own"].set_index("coin")
+    sc = risk_scale(pr)
+    rng = np.random.default_rng(seed)
+    rows = []
+    for kind, crossed in (("passive", False), ("own_taker", True)):
+        ev = fill_event_skew(label, p, horizons=horizons, crossed=crossed)
+        if not len(ev):
+            continue
+        ev = ev[ev.coin.isin(pr.index)].dropna()
+        for h in horizons:
+            e = ev[(ev.h == h) & (ev.fill_dq != 0)].copy()
+            if len(e) < 50:
+                continue
+            e["x"] = -1e4 * sc.reindex(e.coin).values * e.fill_dq / e.S
+            e["y"] = 1e4 * e.dc / e.S
+            e["db"] = 1e4 * e.dbasis / e.S
+            e["dr"] = 1e4 * e.dret
+            for c in ("x", "y", "db", "dr"):
+                lo, hi = e[c].quantile([0.01, 0.99])
+                e[c] = e[c].clip(lo, hi)
+            th = np.array([sm.OLS(g.y, g[["x", "db", "dr"]]).fit().params["x"]
+                           for _, g in e.groupby("coin") if len(g) >= 15 and g.x.std() > 0])
+            if len(th) < 10:
+                continue
+            bs = np.array([np.median(rng.choice(th, len(th))) for _ in range(n_boot)])
+            rows.append({"kind": kind, "h": h, "theta": float(np.median(th)), "lo": float(np.quantile(bs, 0.025)),
+                         "hi": float(np.quantile(bs, 0.975)), "share_positive": float((th > 0).mean()),
+                         "coins": len(th), "n": len(e)})
+    return pd.DataFrame(rows)
+
+
+def coin_median_within(params, n_boot=500, seed=0):
+    """Naive textbook estimator: per-coin levels regression of the quote centre on the
+    inventory stock (coins whose inventory moved), theta_i = b_i / s_i, cross-coin median."""
+    pr = params[(params.calib == "own") & (params.n_own_fills >= 10)].copy()
+    pr = pr[np.isfinite(pr.b_aug)]
+    th = (pr.b_aug / risk_scale(pr)).values
+    if len(th) < 10:
+        return {}
+    rng = np.random.default_rng(seed)
+    bs = np.array([np.median(rng.choice(th, len(th))) for _ in range(n_boot)])
+    return {"theta": float(np.median(th)), "lo": float(np.quantile(bs, 0.025)), "hi": float(np.quantile(bs, 0.975)),
+            "share_positive": float((th > 0).mean()), "coins": len(th)}

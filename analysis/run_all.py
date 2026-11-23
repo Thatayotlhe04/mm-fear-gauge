@@ -17,8 +17,8 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.dirname(__file__))
 import breaks  # noqa: E402
 import glft  # noqa: E402
-from model import (coin_params, event_b, fear_gauge, fill_event_skew, maker_fill_rates,  # noqa: E402
-                   size_skew, taker_threshold)
+from model import (coin_median_within, coin_params, event_b, event_horizon_profile, fear_gauge,  # noqa: E402
+                   fill_event_skew, maker_fill_rates, risk_scale, size_skew, taker_threshold)
 from panel import ROOT, aggressor_orders, build_panel, load  # noqa: E402
 
 RES = os.path.join(ROOT, "results")
@@ -202,6 +202,35 @@ def run_label(label):
         tk["zbin"] = pd.qcut(tk.z, 12, duplicates="drop")
         tk.groupby("zbin", observed=True).agg(z=("z", "median"), red=("red", "mean"), n=("red", "size")).reset_index().assign(
             zbin=lambda x: x.zbin.astype(str)).to_csv(os.path.join(RES, f"taker_bins_{label}.csv"), index=False)
+    # robust headline estimators of the posted price skew
+    prof = event_horizon_profile(label, p, params)
+    prof.to_csv(os.path.join(RES, f"event_profile_{label}.csv"), index=False)
+    out["price_skew"] = {"naive_levels": coin_median_within(params)}
+    pz = prof[(prof.kind == "passive") & (prof.h == 5)]
+    if len(pz):
+        out["price_skew"]["event_5s"] = pz.iloc[0].drop(["kind", "h"]).to_dict()
+    pz = prof[(prof.kind == "passive") & (prof.h == 1800)]
+    if len(pz):
+        out["price_skew"]["event_30m"] = pz.iloc[0].drop(["kind", "h"]).to_dict()
+    # convert theta = sqrt(gamma) into gamma, bps per $10k (typical coin) and an hourly holding cost
+    own = params[params.calib == "own"].set_index("coin")
+    s_bps10k = float((1e4 * risk_scale(own) * (1e4 / own.S) / own.S).median())
+    sig_med = float(own.sigma_bps_s.median()) / 1e4
+    def _conv(th):
+        g = np.sign(th) * th ** 2
+        return {"gamma": g, "bps_per_10k": th * s_bps10k,
+                "hold_cost_bps_10k_1h": 1e4 * 0.5 * g * sig_med ** 2 * 1e4 * 3600}
+    for k, v in out["price_skew"].items():
+        if v:
+            v.update({f"{kk}": vv for kk, vv in _conv(v["theta"]).items()})
+            v.update({f"{kk}_lo": vv for kk, vv in _conv(max(v["lo"], 0)).items()})
+            v.update({f"{kk}_hi": vv for kk, vv in _conv(v["hi"]).items()})
+    tt = out["taker_threshold"]
+    if "z_bar" in tt:
+        for tag, zb in (("", tt["z_bar"]), ("_lo", tt["z_bar_hi"]), ("_hi", tt["z_bar_lo"])):
+            for kk, vv in _conv(1 / zb).items():
+                tt[f"{kk}{tag}"] = vv
+    out["scale"] = {"bps_per_10k_per_theta": s_bps10k, "median_sigma_bps_s": sig_med * 1e4}
     # cross-account response: does this account reprice when its sibling is filled?
     if label in ("A", "B"):
         sib = "B" if label == "A" else "A"
@@ -221,15 +250,20 @@ def run_label(label):
                                          "t": float(r.tvalues["fill_bps_per_10k"]), "n": int(r.nobs), "coins": int(e.coin.nunique())}
     out["seconds"] = time.time() - t0
     print(f"[{label}] {out['minutes']:.0f} min, {len(params)} coins, {out['seconds']:.0f}s", flush=True)
-    return out, p, params
+    return out, None, params
 
 
 def main():
     os.makedirs(RES, exist_ok=True)
     summary = {}
     panels, params = {}, {}
+    import gc
     for label in ("A", "B", "V"):
-        summary[label], panels[label], params[label] = run_label(label)
+        summary[label], _, params[label] = run_label(label)
+        gc.collect()
+    cols = ["t_recv", "coin", "b1", "a1", "q", "two_sided", "c_bps", "basis_bps", "S", "bs1", "as1"]
+    for label in ("A", "B", "V"):
+        panels[label] = pd.read_parquet(os.path.join(ROOT, "work", f"panel_{label}.parquet"), columns=cols)
     m, twin = breaks.twin_strategies(panels["A"], panels["B"], params["A"], params["B"])
     m.to_csv(os.path.join(RES, "twin_params.csv"), index=False)
     ok = m[(m.t_aug_A > 2) & (m.t_aug_B > 2)]
@@ -240,6 +274,7 @@ def main():
     summary["twin"] = twin
     attr, bw = breaks.inventory_attribution(panels["A"], panels["V"], params["V"])
     summary["attribution"] = attr
+    summary["mirror"] = breaks.mirror_stats()
     bw.to_csv(os.path.join(RES, "attribution_windows.csv"), index=False)
     jdump(summary, "summary.json")
     print(json.dumps({k: ({kk: v[kk] for kk in ("pooled", "coin_gamma", "overid")} if k in ("A", "B", "V") else v)

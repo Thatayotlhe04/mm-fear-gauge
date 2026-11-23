@@ -57,21 +57,16 @@ def fig_fear_gauge(summary):
         th = pd.to_datetime(tw.h) + pd.Timedelta(minutes=15)
         S = summary["V"]["taker_threshold"]
         scale = S["reservation_skew_bps_per_10k"] * S["z_bar"]
-        ax.plot(th, scale / tw.z_bar, "-s", ms=4, color=style.SERIES[0], label="taker-revealed reservation skew")
-        ax.axhline(S["reservation_skew_bps_per_10k"], color=style.MUTED, lw=0.8, ls=":")
-        ax.text(th.iloc[0], S["reservation_skew_bps_per_10k"], "  full-sample", color=style.MUTED, fontsize=7.5, va="bottom")
-    if fg is not None and len(fg):
-        tf = pd.to_datetime(fg.w) + pd.Timedelta(minutes=5)
-        pr = rd("params_V.csv")
-        from model import risk_scale
-        sc = risk_scale(pr[pr.calib == "own"].set_index("coin"))
-        Sx = pr.set_index("coin").S.reindex(sc.index)
-        med = float((1e4 * sc * (1e4 / Sx) / Sx).median())
-        ax.plot(tf, fg.theta * med, "--", color=style.SERIES[1], lw=1.2, label="posted price skew (between-coin)")
+        ax.plot(th, scale / tw.z_bar, "-s", ms=4, color=style.SERIES[0], label="unwind threshold, 30-min windows (lower bound)")
+        ax.axhline(S["reservation_skew_bps_per_10k"], color=style.MUTED, lw=0.8, ls=":", label="unwind threshold, full sample")
+    g5 = summary["V"]["price_skew"].get("event_5s")
+    if g5:
+        ax.axhspan(g5["bps_per_10k_lo"], g5["bps_per_10k_hi"], color=style.SERIES[1], alpha=0.10, lw=0)
+        ax.axhline(g5["bps_per_10k"], color=style.SERIES[1], lw=1, ls="--", label="quote response to fill shocks (full sample)")
     ax.axhline(0, color=style.GRID, lw=0.8)
     ax.set_ylabel("bps of price\nper $10k inventory")
-    ax.legend(loc="center right", fontsize=7.5)
-    ax.text(0, 1.02, "Middle: where its unwinds say its reservation price sits (30-min) vs the skew it actually posts",
+    ax.legend(loc="upper left", fontsize=7.5)
+    ax.text(0, 1.02, "Middle: reservation-price skew implied by when HLP starts dumping inventory with market orders",
             transform=ax.transAxes, color=style.INK2, fontsize=8.5)
     ax = axes[2]
     if fg is not None and len(fg):
@@ -116,34 +111,52 @@ def fig_levers(summary):
 
 def fig_show_vs_do(summary):
     S = summary["V"]
+    ps, tt = S["price_skew"], S["taker_threshold"]
     rows = []
-    pr = rd("params_V.csv")
-    from model import risk_scale
-    sc = risk_scale(pr[pr.calib == "own"].set_index("coin"))
-    Sx = pr.set_index("coin").S.reindex(sc.index)
-    med = float((1e4 * sc * (1e4 / Sx) / Sx).median())
-    for key, name in (("event", "posted price skew\nfill-event study"), ("within", "posted price skew\nwithin coin")):
-        v = S["pooled"].get(key)
-        if v:
-            rows.append((name, v["theta"] * med, 1.96 * v["theta_se"] * med))
-    tt = S["taker_threshold"]
-    lo = med / tt["z_bar_hi"]; hi = med / tt["z_bar_lo"]
-    rows.append(("reservation skew\nrevealed by unwinds", tt["reservation_skew_bps_per_10k"], None, lo, hi))
-    fig, ax = plt.subplots(figsize=(7.4, 4.2))
-    for i, r in enumerate(rows):
-        if len(r) == 3:
-            ax.errorbar(r[1], i, xerr=r[2], fmt="o", color=style.SERIES[1], ms=6, capsize=0, lw=1.4)
-            ax.text(r[1], i + 0.18, f"{r[1]:+.1f}", ha="center", color=style.INK2, fontsize=8)
-        else:
-            ax.errorbar(r[1], i, xerr=[[r[1] - r[3]], [r[4] - r[1]]], fmt="s", color=style.SERIES[0], ms=6, capsize=0, lw=1.4)
-            ax.text(r[1], i + 0.18, f"{r[1]:+.1f}", ha="center", color=style.INK, fontsize=8)
+    if ps.get("naive_levels"):
+        v = ps["naive_levels"]
+        rows.append(("naive textbook regression\nquote centre on inventory stock", v["bps_per_10k"],
+                     v["theta"] * S["scale"]["bps_per_10k_per_theta"] if False else v["bps_per_10k"],
+                     v["lo"] * S["scale"]["bps_per_10k_per_theta"], v["hi"] * S["scale"]["bps_per_10k_per_theta"], style.SERIES[2]))
+    if ps.get("event_5s"):
+        v = ps["event_5s"]
+        rows.append(("identified: quote response to\nfills HLP did not choose (5 s)", v["bps_per_10k"], None, v["bps_per_10k_lo"],
+                     v["bps_per_10k_hi"], style.SERIES[0]))
+    rows.append(("identified: market-order unwind\nthreshold (lower bound)", tt["bps_per_10k"], None, tt["bps_per_10k_lo"],
+                 tt["bps_per_10k_hi"], style.SERIES[1]))
+    fig, ax = plt.subplots(figsize=(8.2, 4.3))
+    for i, (name, x, _, lo, hi, col) in enumerate(rows):
+        ax.errorbar(x, i, xerr=[[x - lo], [hi - x]], fmt="o", color=col, ms=7, capsize=0, lw=1.6)
+        ax.text(x, i + 0.2, f"{x:+.0f}", ha="center", color=style.INK, fontsize=8.5)
     ax.axvline(0, color=style.MUTED, lw=0.8)
-    ax.set_yticks(range(len(rows))); ax.set_yticklabels([r[0] for r in rows])
+    ax.set_yticks(range(len(rows))); ax.set_yticklabels([r[0] for r in rows], fontsize=8.5)
     ax.set_ylim(-0.6, len(rows) - 0.4)
-    ax.set_xlabel("bps of price per $10k of vault inventory (typical coin, 95% CI)")
-    style.title(ax, "What HLP shows vs what it does",
-                "GLFT says posted quotes centre on the reservation price. HLP's do not.")
-    save(fig, "03_show_vs_do.png")
+    ax.set_xlabel("reservation-price skew, bps per $10k of vault inventory (typical coin, 95% CI)")
+    g5 = ps.get("event_5s", {})
+    style.title(ax, "The textbook regression says risk-neutral. Identified, it isn't.",
+                f"gamma ~ {g5.get('gamma', float('nan')):.4f} per $ from fill shocks; at least {tt['gamma']:.4f} per $ from the unwind threshold")
+    save(fig, "03_three_estimators.png")
+
+
+def fig_event_profile():
+    e = rd("event_profile_V.csv")
+    if e is None or not len(e):
+        return
+    fig, ax = plt.subplots(figsize=(7.4, 4.3))
+    for kind, col, mk, lab in (("passive", style.SERIES[0], "o", "after passive fills (shock HLP did not choose)"),
+                               ("own_taker", style.SERIES[1], "s", "after HLP's own market orders")):
+        g = e[e.kind == kind]
+        ax.fill_between(g.h, g.lo, g.hi, color=col, alpha=0.12, lw=0)
+        ax.plot(g.h, g.theta, "-", marker=mk, ms=4, color=col, label=lab)
+    ax.axhline(0, color=style.MUTED, lw=0.8)
+    ax.set_xscale("log")
+    ax.set_xticks([5, 30, 120, 300, 900, 1800]); ax.set_xticklabels(["5s", "30s", "2m", "5m", "15m", "30m"])
+    ax.set_xlabel("time after the inventory shock")
+    ax.set_ylabel("theta = sqrt(gamma), median coin")
+    ax.legend(loc="upper left", fontsize=8)
+    style.title(ax, "The lean is real, and it builds for minutes",
+                "Quote-centre response per unit of GLFT-scaled inventory shock; GLFT re-centres instantly")
+    save(fig, "10_event_profile.png")
 
 
 def fig_overid():
@@ -437,7 +450,8 @@ def main():
     os.makedirs(FIG, exist_ok=True)
     summary = json.load(open(os.path.join(RES, "summary.json")))
     for f in (fig_mirror, fig_exposure, lambda: fig_fear_gauge(summary), lambda: fig_levers(summary),
-              lambda: fig_show_vs_do(summary), fig_overid, fig_markouts, fig_intensity, fig_simulation, fig_ladder):
+              lambda: fig_show_vs_do(summary), fig_event_profile, fig_overid, fig_markouts, fig_intensity, fig_simulation,
+              fig_ladder):
         try:
             f()
         except Exception as e:  # keep going: one broken figure should not stop the rest

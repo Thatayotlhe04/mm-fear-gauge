@@ -1,4 +1,5 @@
 """Render results/RESULTS.md: every number the README quotes, regenerated from the data."""
+import glob
 import json
 import os
 import sys
@@ -19,7 +20,7 @@ def f(x, nd=2):
     if isinstance(x, (int, np.integer)):
         return f"{x:,}"
     ax = abs(x)
-    if ax != 0 and (ax < 1e-3 or ax >= 1e5):
+    if ax != 0 and (ax < 1e-2 or ax >= 1e5):
         return f"{x:.{nd}e}"
     return f"{x:,.{nd}f}"
 
@@ -184,5 +185,119 @@ def main():
     print("wrote results/RESULTS.md")
 
 
+
+
+# ---------------------------------------------------------------- README
+def _pct(x, nd=0):
+    return f"{100 * x:.{nd}f}%"
+
+
+def _money(x):
+    s = "+" if x >= 0 else "-"
+    return f"{s}${abs(x) / 1e6:.2f}M"
+
+
+def _ci(lo, hi, nd=1):
+    return f"{lo:.{nd}f} to {hi:.{nd}f}"
+
+
+def readme_values():
+    S = json.load(open(os.path.join(RES, "summary.json")))
+    V, M = S["V"], S["mirror"]
+    ps, tt, ss = V["price_skew"], V["taker_threshold"], V["size_skew"]
+    nv, ev = ps.get("naive_levels", {}), ps.get("event_5s", {})
+    sc = V["scale"]["bps_per_10k_per_theta"]
+    start, end = pd.Timestamp(V["start"]), pd.Timestamp(V["end"])
+    from panel import load as _load
+    n_tr = len(_load("A", "trades").drop_duplicates("tid"))
+    fills = pd.concat([_load("A", "fills"), _load("B", "fills")]).drop_duplicates("tid")
+    n_fills = int(((fills.time >= start.value // 10**6) & (fills.time <= end.value // 10**6)).sum())
+    mk = pd.read_csv(os.path.join(RES, "markouts_V.csv")).set_index("type")
+    lad = pd.read_csv(os.path.join(RES, "ladder_A.csv")).set_index("rank").loc[1:8]
+    sb = pd.read_csv(os.path.join(RES, "size_skew_bins_V.csv"))
+    taker = {r["crossed"]: r for r in V["taker"]["summary"]}
+    sw = pd.read_csv(os.path.join(RES, "size_skew_windows_V.csv"))
+    tw = pd.read_csv(os.path.join(RES, "taker_windows_V.csv"))
+    fg = pd.read_csv(os.path.join(RES, "fear_gauge_V.csv"))
+    sw["w"] = pd.to_datetime(sw.w)
+    fg["w"] = pd.to_datetime(fg.w)
+    j = sw.merge(fg[["w", "mkt_vol"]], on="w", how="left")
+    r_sv = j.size_skew.corr(j.mkt_vol)
+    tw_bps = tt["bps_per_10k"] * tt["z_bar"] / tw.z_bar if len(tw) else pd.Series(dtype=float)
+    cv = sw.size_skew.std() / sw.size_skew.mean()
+    fear = (f"Over this session the size lean held between {100 * sw.size_skew.min():.1f} and {100 * sw.size_skew.max():.1f} "
+            f"percentage points of imbalance per $1k (coefficient of variation {100 * cv:.0f}%), and the unwind-implied skew "
+            f"between {tw_bps.min():.0f} and {tw_bps.max():.0f} bps per $10k across {len(tw)} half-hour windows. "
+            f"Across the {len(j)} ten-minute windows the size lean was "
+            + ("weaker" if r_sv < 0 else "stronger") + f" when the market was more volatile (correlation {r_sv:+.2f}); "
+            + ("with this few windows that is a description of the session, not an estimate of how HLP responds to volatility."))
+    import re as _re
+    err429 = recon = 0
+    for lbl in ("A", "B"):
+        for f in glob.glob(os.path.join(ROOT, "data", "r*", lbl, "status.log")):
+            last = [ln for ln in open(f) if " status " in ln][-1]
+            err429 += int(_re.search(r"429=(\d+)", last).group(1))
+            recon += int(_re.search(r"ws_reconnect=(\d+)", last).group(1))
+    vals = {
+        "ERR429": str(err429), "RECONNECTS": str(recon),
+        "HOURS": f"{V['minutes'] / 60:.1f}", "START": start.strftime("%H:%M"), "END": end.strftime("%H:%M"),
+        "DATE": start.strftime("%d %B %Y").lstrip("0"), "QUOTES": f"{S['A']['n_quotes'] + S['B']['n_quotes']:,}",
+        "COINS": str(V["n_coins_quoted"]), "FILLS": f"{n_fills:,}", "TRADES": f"{n_tr:,}",
+        "HELD": str(M["coins_held_by_both"]), "CORR_POS": f"{M['corr_signed_positions']:.3f}",
+        "SAME_SIGN": _pct(M["share_same_sign"]), "GROSS_A": f"{(M['gross_A'] + M['gross_B']) / 2 / 1e6:.1f}",
+        "GROSS_V": f"{M['gross_vault'] / 1e3:.0f}", "FLOW_CORR": f"{M['corr_usd_flow_coin_minute']:.2f}",
+        "SAME_SIDE": _pct(M["share_same_side_when_both_take"]), "AB_TRADES": str(M["trades_between_A_and_B"]),
+        "PNL_A": _money(M["alltime_pnl_A"]), "PNL_B": _money(M["alltime_pnl_B"]),
+        "NAIVE_BPS": f"{nv.get('bps_per_10k', float('nan')):+.1f}",
+        "NAIVE_CI": _ci(nv.get("lo", np.nan) * sc, nv.get("hi", np.nan) * sc),
+        "EV_SHARE": _pct(ev.get("share_positive", np.nan)), "EV_BPS": f"{ev.get('bps_per_10k', np.nan):.0f}",
+        "EV_CI": _ci(ev.get("bps_per_10k_lo", np.nan), ev.get("bps_per_10k_hi", np.nan), 0),
+        "EV_GAMMA": f"{ev.get('gamma', np.nan):.4f}", "EV_GAMMA_CI": _ci(ev.get("gamma_lo", np.nan), ev.get("gamma_hi", np.nan), 4),
+        "EV_HOLD": f"{ev.get('hold_cost_bps_10k_1h', np.nan):.0f} bps** (CI {_ci(ev.get('hold_cost_bps_10k_1h_lo', np.nan), ev.get('hold_cost_bps_10k_1h_hi', np.nan), 0)} bps)**".replace("** (", " (").rstrip("*"),
+        "TAKER_SHARE": _pct((M["taker_share_A"] + M["taker_share_B"]) / 2),
+        "P_BELOW": f"{tt['p_below']:.2f}", "P_ABOVE": f"{tt['p_above']:.2f}", "THRESH": f"{tt['median_threshold_usd']:,.0f}",
+        "LR": f"{tt['lr_stat_vs_flat']:.0f}", "COST": f"{tt['median_cost_bps']:.1f}", "TT_BPS": f"{tt['bps_per_10k']:.0f}",
+        "TT_GAMMA": f"{tt['gamma']:.4f}", "TT_GAMMA_CI": _ci(tt["gamma_lo"], tt["gamma_hi"], 4),
+        "LR_A": f"{S['A']['taker_threshold'].get('lr_stat_vs_flat', np.nan):.0f}",
+        "LR_B": f"{S['B']['taker_threshold'].get('lr_stat_vs_flat', np.nan):.0f}",
+        "SS_WITHIN": f"{100 * ss['within']:.1f} pp", "SS_WITHIN_T": f"{ss['within_t']:.1f}",
+        "SS_BETWEEN": f"{100 * ss['between']:.1f} pp", "SS_BETWEEN_T": f"{ss['between_t']:.1f}",
+        "SS_SHORT": f"{100 * sb.simb.iloc[0]:+.0f}%", "SS_LONG": f"{100 * sb.simb.iloc[-1]:+.0f}%",
+        "ATTR_V_T": f"{S['attribution']['size_lean']['Q_vault_1k']['t']:.1f}",
+        "ATTR_O_T": f"{S['attribution']['size_lean']['Q_own_1k']['t']:.1f}",
+        "FEAR_SENTENCE": fear, "RED_SHARE": _pct(taker[1]["share_reducing"]),
+        "EDGE": f"{mk.loc['maker', 'edge_bps']:.0f}", "MO60": f"{mk.loc['maker', 'mo60']:.1f}",
+        "P_TOP": f"{pd.read_csv(os.path.join(RES, 'taker_bins_V.csv')).red.iloc[-1]:.2f}",
+        "CROSS": "; ".join(f"Strategy {l}: {S[l]['cross_account']['sibling_fills']['bps_per_10k_fill']:.0f} vs "
+                           f"{S[l]['cross_account']['own_fills']['bps_per_10k_fill']:.0f} bps per $10k filled, "
+                           f"t {S[l]['cross_account']['sibling_fills']['t']:.1f} and {S[l]['cross_account']['own_fills']['t']:.1f}"
+                           for l in ("A", "B")), "AS60": f"{mk.loc['maker', 'edge_bps'] - mk.loc['maker', 'mo60']:.0f}",
+        "PSI_RATIO": f"{V['overid']['median_psi_ratio']:.1f}", "UNRAT": _pct(V["overid"]["share_spread_unrationalisable"]),
+        "FLOW_SHARE": _pct(V["intensity"]["median_flow_share"]),
+        "VOL_EL": f"{V['vol_scaling']['elasticity_psi_sigma']:.2f} (s.e. {V['vol_scaling']['se']:.2f})",
+        "EXP_SHARE": _pct(V["intensity"]["share_exp_beats_pow_aic"]), "R2_EXP": f"{V['intensity']['median_r2_exp']:.2f}",
+        "R2_POW": f"{V['intensity']['median_r2_pow']:.2f}",
+        "LADDER_D": ", ".join(f"{d:.0f}" for d in lad.dist_bps), "LADDER_TOP": f"{lad.usd.iloc[0]:,.0f}",
+        "LADDER_DEEP": f"{lad.usd.iloc[1:].min():,.0f}–{lad.usd.iloc[1:].max():,.0f}",
+        "HLP_EQ": f"{M.get('equity_reported_HLP', np.nan) / 1e6:.0f}", "TRADE_EQ": f"{V['account_value'] / 1e6:.1f}",
+        "N_WIN": str(len(sw)),
+        "METHOD": open(os.path.join(ROOT, "report", "method.md")).read().strip(),
+    }
+    return vals, S
+
+
+def render_readme():
+    vals, _ = readme_values()
+    t = open(os.path.join(ROOT, "report", "README.template.md")).read()
+    for k, v in vals.items():
+        t = t.replace("{" + k + "}", v)
+    left = sorted(set(__import__("re").findall(r"\{[A-Z_0-9]+\}", t)))
+    if left:
+        print("unfilled placeholders:", left)
+    open(os.path.join(ROOT, "README.md"), "w").write(t)
+    print("wrote README.md")
+
+
 if __name__ == "__main__":
     main()
+    render_readme()

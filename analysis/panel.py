@@ -26,6 +26,12 @@ def load(label, stream, run=None):
     if not files:
         return pd.DataFrame()
     df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    from config import END_MS, START_MS, TIME_COL
+    tc = TIME_COL.get(stream)
+    if tc in df:
+        # fills keep a little history before the window so inventory paths start correctly
+        lo = START_MS - (3_600_000 if stream == "fills" else 0)
+        df = df[(df[tc] >= lo) & (df[tc] <= END_MS)].reset_index(drop=True)
     if "coin" in df:
         df["coin"] = df.coin.astype("str")
     return df
