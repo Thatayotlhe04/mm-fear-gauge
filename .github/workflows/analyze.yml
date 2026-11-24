@@ -25,6 +25,7 @@ jobs:
       - run: bash analysis/sync_data.sh
       - run: python analysis/simulate.py
       - run: python analysis/run_all.py
+      - run: python analysis/decompose.py
       - run: python analysis/figures.py
       - run: python analysis/report.py
       - name: commit results
