@@ -238,7 +238,14 @@ def readme_values():
             last = [ln for ln in open(f) if " status " in ln][-1]
             err429 += int(_re.search(r"429=(\d+)", last).group(1))
             recon += int(_re.search(r"ws_reconnect=(\d+)", last).group(1))
+    D = json.load(open(os.path.join(RES, "decomposition.json")))
+    dp, dt, br = D["passive"], D["own_taker"], D["bracket"]
     vals = {
+        "DP_TH": f"{dp['theta_inventory']:.3f}", "DP_CI": _ci(*dp["theta_inventory_ci"], 3), "DP_NEWS": f"{dp['news_bps']:+.1f}",
+        "DT_TH": f"{dt['theta_inventory']:.3f}", "DT_CI": _ci(*dt["theta_inventory_ci"], 3),
+        "G_LO": f"{br['gamma'][0]:.4f}", "G_HI": f"{br['gamma'][1]:.4f}",
+        "B_LO": f"{br['bps_per_10k'][0]:.0f}", "B_HI": f"{br['bps_per_10k'][1]:.0f}",
+        "H_LO": f"{br['hold_cost_bps_10k_1h'][0]:.0f}", "H_HI": f"{br['hold_cost_bps_10k_1h'][1]:.0f}",
         "ERR429": str(err429), "RECONNECTS": str(recon),
         "HOURS": f"{V['minutes'] / 60:.1f}", "START": start.strftime("%H:%M"), "END": end.strftime("%H:%M"),
         "DATE": start.strftime("%d %B %Y").lstrip("0"), "QUOTES": f"{S['A']['n_quotes'] + S['B']['n_quotes']:,}",
